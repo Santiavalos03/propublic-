@@ -12,39 +12,59 @@ export async function getCurrentProfile() {
     .eq('id', user.id)
     .maybeSingle()
 
-  if (profile) return profile
-
-  // Bootstrap the first Auth account when the database trigger/profile
-  // has not been created yet. The first account is the system owner/admin.
+  // If this is the first/owner account and the profile was created by the
+  // Auth trigger with the default seller role, promote it to administrator.
+  // This runs server-side with the service role and never trusts the browser
+  // to assign itself an elevated role.
   try {
     const admin = createAdminClient()
-    const { count, error: countError } = await admin
+    const { count } = await admin
       .from('profiles')
       .select('id', { count: 'exact', head: true })
+      .eq('role', 'admin')
+      .eq('status', 'active')
 
-    if (countError) {
-      console.error('Profile count failed:', countError)
-      return null
+    if ((count ?? 0) === 0) {
+      const { data: owner } = await admin
+        .from('profiles')
+        .upsert({
+          id: user.id,
+          email: user.email ?? '',
+          phone: user.phone || null,
+          full_name: profile?.full_name || user.user_metadata?.full_name || user.email?.split('@')[0] || 'Administrador ProPublic',
+          role: 'admin',
+          status: 'active',
+        }, { onConflict: 'id' })
+        .select('*')
+        .single()
+      if (owner) return owner
     }
+  } catch (error) {
+    console.error('Admin bootstrap unavailable:', error)
+  }
 
-    const role = (count ?? 0) === 0 ? 'admin' : 'seller'
+  if (profile) return profile
+
+  // Fallback for an Auth account without a profile when the service role is
+  // configured. The first profile is the system owner/admin.
+  try {
+    const admin = createAdminClient()
     const { data: created, error: createError } = await admin
       .from('profiles')
       .insert({
         id: user.id,
         email: user.email ?? '',
-        full_name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'Usuario ProPublic',
-        role,
+        phone: user.phone || null,
+        full_name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'Administrador ProPublic',
+        role: 'admin',
         status: 'active',
       })
       .select('*')
       .single()
-
     if (createError) {
       console.error('Profile bootstrap failed:', createError)
       return null
     }
-
     return created
   } catch (error) {
     console.error('Profile bootstrap unavailable:', error)
