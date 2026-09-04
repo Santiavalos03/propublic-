@@ -1,6 +1,7 @@
 'use client'
 
 import {useState} from 'react'
+import { createClient } from '@/lib/supabase/client'
 
 export default function Login(){
  const [identifier,setIdentifier]=useState('')
@@ -12,22 +13,28 @@ export default function Login(){
   e.preventDefault()
   setBusy(true)
   setError('')
-
   try {
    const value=identifier.trim()
-   const r=await fetch('/api/auth/login',{
-    method:'POST',
-    headers:{'content-type':'application/json'},
-    credentials:'include',
-    body:JSON.stringify({identifier:value,password}),
-   })
-   const j=await r.json().catch(()=>({}))
-   if(!r.ok) throw new Error(j.error||'No fue posible iniciar sesión')
+   let email=value.toLowerCase()
+   const supabase=createClient()
 
-   // Do a real browser navigation after the server has issued the
-   // Supabase auth cookies. This guarantees the protected server layout
-   // receives the same authenticated session and prevents login loops.
-   window.location.assign('/dashboard')
+   if(!value.includes('@')){
+    const r=await fetch('/api/auth/resolve-phone',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({phone:value})})
+    const j=await r.json().catch(()=>({}))
+    if(!r.ok || !j.email) throw new Error(j.error||'Usuario no encontrado')
+    email=j.email
+   }
+
+   const {error:authError}=await supabase.auth.signInWithPassword({email,password})
+   if(authError) throw new Error('Correo o contraseña incorrectos')
+
+   const bootstrap=await fetch('/api/auth/bootstrap',{method:'POST',credentials:'include'})
+   if(!bootstrap.ok){
+    const j=await bootstrap.json().catch(()=>({}))
+    throw new Error(j.error||'No se pudo preparar tu cuenta')
+   }
+
+   window.location.replace('/dashboard')
   } catch(err) {
    setError(err instanceof Error?err.message:'No fue posible iniciar sesión')
    setBusy(false)
