@@ -14,17 +14,10 @@ export default function Login(){
   setBusy(true)
   setError('')
   try {
-   const value=identifier.trim()
-   let email=value.toLowerCase()
+   const email=identifier.trim().toLowerCase()
+   if(!email.includes('@')) throw new Error('Ingresá tu correo electrónico')
+
    const supabase=createClient()
-
-   if(!value.includes('@')){
-    const r=await fetch('/api/auth/resolve-phone',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({phone:value})})
-    const j=await r.json().catch(()=>({}))
-    if(!r.ok || !j.email) throw new Error(j.error||'Usuario no encontrado')
-    email=j.email
-   }
-
    const {error:authError}=await supabase.auth.signInWithPassword({email,password})
    if(authError) throw new Error('Correo o contraseña incorrectos')
 
@@ -44,8 +37,8 @@ export default function Login(){
  return <main className="login"><form className="loginbox" onSubmit={submit}>
   <img src="/propublic-logo.png" alt="ProPublic"/><h1>Acceso</h1><p className="sub">ProPublic Sistema Integral</p>
   {error&&<div className="error">{error}</div>}
-  <div className="field" style={{marginTop:18}}><label>Correo electrónico o teléfono</label><input className="input" value={identifier} onChange={e=>setIdentifier(e.target.value)} required/></div>
-  <div className="field" style={{marginTop:14}}><label>Contraseña</label><input type="password" className="input" value={password} onChange={e=>setPassword(e.target.value)} required/></div>
+  <div className="field" style={{marginTop:18}}><label>Correo electrónico</label><input type="email" className="input" value={identifier} onChange={e=>setIdentifier(e.target.value)} required autoComplete="email"/></div>
+  <div className="field" style={{marginTop:14}}><label>Contraseña</label><input type="password" className="input" value={password} onChange={e=>setPassword(e.target.value)} required autoComplete="current-password"/></div>
   <button className="btn" style={{width:'100%',marginTop:20}} disabled={busy}>{busy?'Ingresando…':'Ingresar'}</button>
  </form></main>
 }
