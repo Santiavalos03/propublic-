@@ -1,33 +1,39 @@
 'use client'
+
 import {useState} from 'react'
-import {useRouter} from 'next/navigation'
-import {createClient} from '@/lib/supabase/client'
 
 export default function Login(){
- const [identifier,setIdentifier]=useState('');const [password,setPassword]=useState('');const [error,setError]=useState('');const [busy,setBusy]=useState(false);const router=useRouter()
+ const [identifier,setIdentifier]=useState('')
+ const [password,setPassword]=useState('')
+ const [error,setError]=useState('')
+ const [busy,setBusy]=useState(false)
+
  async function submit(e:React.FormEvent){
-  e.preventDefault();setBusy(true);setError('')
-  const value=identifier.trim()
+  e.preventDefault()
+  setBusy(true)
+  setError('')
+
   try {
-   if(!value.includes('@')){
-    const r=await fetch('/api/auth/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({identifier:value,password})})
-    const j=await r.json();
-    if(!r.ok) throw new Error(j.error||'No fue posible iniciar sesión')
-   } else {
-    const supabase=createClient()
-    const {error:authError}=await supabase.auth.signInWithPassword({email:value.toLowerCase(),password})
-    if(authError) throw new Error('Credenciales inválidas')
-    // Bootstrap the ProPublic profile/admin role. The browser session is
-    // already established and persisted independently of this server call.
-    await fetch('/api/auth/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({identifier:value,password})})
-   }
-   router.replace('/dashboard')
-   router.refresh()
+   const value=identifier.trim()
+   const r=await fetch('/api/auth/login',{
+    method:'POST',
+    headers:{'content-type':'application/json'},
+    credentials:'include',
+    body:JSON.stringify({identifier:value,password}),
+   })
+   const j=await r.json().catch(()=>({}))
+   if(!r.ok) throw new Error(j.error||'No fue posible iniciar sesión')
+
+   // Do a real browser navigation after the server has issued the
+   // Supabase auth cookies. This guarantees the protected server layout
+   // receives the same authenticated session and prevents login loops.
+   window.location.assign('/dashboard')
   } catch(err) {
    setError(err instanceof Error?err.message:'No fue posible iniciar sesión')
    setBusy(false)
   }
  }
+
  return <main className="login"><form className="loginbox" onSubmit={submit}>
   <img src="/propublic-logo.png" alt="ProPublic"/><h1>Acceso</h1><p className="sub">ProPublic Sistema Integral</p>
   {error&&<div className="error">{error}</div>}
