@@ -22,11 +22,28 @@ export default function Login() {
         email: normalizedEmail,
         password,
       })
-      if (authError || !data.user) throw new Error('Correo o contraseña incorrectos')
+      if (authError || !data.session || !data.user) throw new Error('Correo o contraseña incorrectos')
 
-      // Authentication is already complete in the browser. Bootstrap is
-      // intentionally non-fatal so a missing service-role key cannot turn a
-      // valid Supabase session into another login loop.
+      // Explicitly synchronize the browser session with Next's server cookies.
+      // This makes the auth state available to middleware and Server Components
+      // even if the browser client cannot persist the SSR cookie by itself.
+      const sync = await fetch('/api/auth/session', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          access_token: data.session.access_token,
+          refresh_token: data.session.refresh_token,
+        }),
+      })
+      if (!sync.ok) {
+        const j = await sync.json().catch(() => ({}))
+        throw new Error(j.error || 'No se pudo preparar la sesión')
+      }
+
+      // Profile creation/promotion is best-effort. A valid authenticated
+      // session must never be converted into a login loop because bootstrap
+      // is unavailable.
       try {
         await fetch('/api/auth/bootstrap', {
           method: 'POST',
