@@ -1,0 +1,3 @@
+import {NextResponse} from 'next/server';import {createClient} from '@/lib/supabase/server';import {audit} from '@/lib/audit'
+export async function POST(req:Request){const s=await createClient();const {data:{user}}=await s.auth.getUser();if(!user)return NextResponse.json({error:'No autenticado'},{status:401})
+const body=await req.json();const {data:code}=await s.rpc('next_number',{prefix:'PP-CLI'});const {data,error}=await s.from('clients').insert({...body,code,seller_id:user.id}).select().single();if(error)return NextResponse.json({error:error.message},{status:400});await audit('crear','clientes',data.id,{code});return NextResponse.json(data)}

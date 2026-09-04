@@ -1,0 +1,4 @@
+import {createClient} from '@/lib/supabase/server'
+import Link from 'next/link'
+export default async function Presupuestos(){const s=await createClient();const {data}=await s.from('quotes').select('*,clients(company_name)').order('created_at',{ascending:false})
+return <><div className="topbar"><div><h1>Presupuestos</h1><p className="sub">Control de cotizaciones y estados.</p></div><Link className="btn" href="/presupuestos/nuevo">Nuevo presupuesto</Link></div><div className="tablewrap"><table className="table"><thead><tr><th>Número</th><th>Cliente</th><th>Total</th><th>Estado</th><th>Fecha</th></tr></thead><tbody>{(data||[]).map(q=><tr key={q.id}><td><Link href={`/p/presupuesto/${q.number}`}><b>{q.number}</b></Link></td><td>{q.clients?.company_name||'Cliente sin registrar'}</td><td>Gs. {Number(q.total).toLocaleString('es-PY')}</td><td><span className="badge">{q.status}</span></td><td>{q.quote_date}</td></tr>)}</tbody></table></div></>}

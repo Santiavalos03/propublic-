@@ -1,0 +1,11 @@
+import {NextResponse} from 'next/server';import {createClient} from '@/lib/supabase/server';import {audit} from '@/lib/audit';import {calculateQuote} from '@/lib/money'
+export async function POST(req:Request){
+ const s=await createClient();const {data:{user}}=await s.auth.getUser();if(!user)return NextResponse.json({error:'No autenticado'},{status:401})
+ const {client_code,discount_code,items=[]}=await req.json(); if(!items.length)return NextResponse.json({error:'Agregue al menos un artículo'},{status:400})
+ let client:any=null;if(client_code){const r=await s.from('clients').select('*').eq('code',client_code).eq('seller_id',user.id).maybeSingle();client=r.data;if(!client)return NextResponse.json({error:'Código de cliente inválido o fuera de su cartera'},{status:400})}
+ let discountPct=0;if(discount_code){const {data:d}=await s.from('discount_codes').select('*').eq('code',discount_code).eq('active',true).maybeSingle();const now=Date.now();if(!d||d.client_id!==client?.id||now<new Date(d.starts_at).getTime()||now>new Date(d.expires_at).getTime()||(d.max_uses&&d.uses_count>=d.max_uses))return NextResponse.json({error:'Código de descuento inválido, vencido o no pertenece al cliente'},{status:400});discountPct=Number(d.percentage)}
+ const subtotal=items.reduce((x:number,y:any)=>x+Number(y.quantity)*Number(y.unit_price),0);const calc=calculateQuote(subtotal,10,discountPct);const {data:number}=await s.rpc('next_number',{prefix:'PP-PRES'});const {data:q,error}=await s.from('quotes').insert({number,client_id:client?.id||null,seller_id:user.id,iva_rate:10,subtotal:calc.subtotal,iva_amount:calc.iva,discount_percentage:discountPct,discount_amount:calc.discount,total:calc.total}).select().single();if(error)return NextResponse.json({error:error.message},{status:400})
+ const mapped=items.map((x:any)=>({quote_id:q.id,product_id:x.product_id||null,description:x.description,quantity:x.quantity,measurements:x.measurements||null,unit_price:x.unit_price,line_total:Number(x.quantity)*Number(x.unit_price),observations:x.observations||null,manual:!x.product_id}))
+ const {error:ie}=await s.from('quote_items').insert(mapped);if(ie){await s.from('quotes').delete().eq('id',q.id);return NextResponse.json({error:ie.message},{status:400})}
+ await audit('crear','presupuestos',q.id,{number});return NextResponse.json(q)
+}
