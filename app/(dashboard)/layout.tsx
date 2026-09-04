@@ -1,12 +1,12 @@
+import { redirect } from 'next/navigation'
 import DashboardShell from '@/components/DashboardShell'
+import { createClient } from '@/lib/supabase/server'
 
-/**
- * ProPublic demo/direct-access mode.
- * Authentication is intentionally bypassed at the UI route level so the
- * dashboard can be opened directly while the production authentication flow
- * is being repaired. Database/RLS policies remain responsible for protected
- * data access.
- */
-export default function Layout({ children }: { children: React.ReactNode }) {
+export default async function Layout({ children }: { children: React.ReactNode }) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (!user) redirect('/login')
+
   return <DashboardShell>{children}</DashboardShell>
 }
